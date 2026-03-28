@@ -24,9 +24,11 @@ SUPPORTED DISTRIBUTIONS
 
 
 FEATURES
-# Automatic Detection
+Automatic Detection
+
 - Detects your distribution and configures the appropriate package manager automatically Interactive Updates with Selective Upgrades Prompts for each operation with numbered package selection using upgrade-only modes
-# Kernel Safety
+Kernel Safety
+
 - Detects kernel updates and offers reboot management
 # Package Cleanup
 - Intelligent autoremove that only prompts when cleanup is needed
