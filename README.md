@@ -15,8 +15,8 @@ Red Hat Family
 
 Arch Family
 - Arch Linux, Manjaro, EndeavourOS, Garuda (using pacman with targeted upgrades)
-openSUSE
 
+openSUSE
 - openSUSE, SLES (using zypper with update mode)
 
 Alpine Linux
@@ -30,13 +30,13 @@ Gentoo Gentoo (using emerge with update mode)
 FEATURES
 Automatic Detection
 - Detects your distribution and configures the appropriate package manager automatically Interactive Updates with Selective Upgrades Prompts for each operation with numbered package selection using upgrade-only modes
-- 
+ 
 Kernel Safety
 - Detects kernel updates and offers reboot management
-- 
+ 
 Package Cleanup
 - Intelligent autoremove that only prompts when cleanup is needed
-- 
+ 
 Comprehensive Logging
 - All actions are logged to /var/log/linup.log for audit purposes
 
@@ -51,7 +51,7 @@ If you're not running swizzin, use the multi-distro version.
 FEATURES
 Interactive Updates with Numbered Selection
 - Prompts user for each update operation with the ability to install all updates or specific updates by number
-- 
+ 
 Swizzin Detection
 - Automatically detects swizzin installations and prompts for update support enablement
 
