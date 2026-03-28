@@ -13,3 +13,9 @@ Most dependencies are base linux tools. If you want to check dependencies first:
 Getting started with swizzin Support:
 "chmod +x linup-swizzin-support-[version]-installer.sh && sudo ./linup-swizzin-support-[version]-installer.sh"
 If you're not running swizzin, use the multi-distro version.
+
+License
+
+CC BY-NC 4.0 © CYBERACQ
+Full license text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
