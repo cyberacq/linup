@@ -10,17 +10,21 @@ SUPPORTED DISTRIBUTIONS
        Debian Family
               Ubuntu, Debian, Linux Mint, Pop!_OS, Elementary, Zorin (using apt with --only-upgrade)
 
-# Red Hat Family
+Red Hat Family
 -  Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux (using dnf/yum with upgrade-only mode)
-# Arch Family
+
+Arch Family
 - Arch Linux, Manjaro, EndeavourOS, Garuda (using pacman with targeted upgrades)
-# openSUSE
+openSUSE
+
 - openSUSE, SLES (using zypper with update mode)
-# Alpine Linux
+
+Alpine Linux
 - Alpine (using apk with upgrade mode)
-#Void Linux
+
+Void Linux
 - Void (using xbps with upgrade mode)
-# Gentoo Gentoo (using emerge with update mode)
+Gentoo Gentoo (using emerge with update mode)
 
 
 FEATURES
