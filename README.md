@@ -4,7 +4,7 @@
 Getting start with Multi-Distro:
 "chmod +x linup-multi-distro-[version]-installer.sh && sudo ./linup-multi-distro-[version]-installer.sh"
 
-Most dependencies are base linux tools. If you want to check dependencies first: "sudo ./linup-multi-distro-installer_[version].sh -c"
+Most dependencies are base linux tools. If you want to check dependencies first: "sudo ./linup-multi-distro-[version]-installer.sh -c"
 
 
 # LinUp with swizzin Support
