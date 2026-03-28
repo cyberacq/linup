@@ -6,7 +6,7 @@ Getting start with Multi-Distro:
 
 Most dependencies are base linux tools. If you want to check dependencies first: "sudo ./linup-multi-distro-[version]-installer.sh -c"
 
-# SUPPORTED DISTRIBUTIONS
+SUPPORTED DISTRIBUTIONS
 
 Debian Family
 - Ubuntu, Debian, Linux Mint, Pop!_OS, Elementary, Zorin (using apt with --only-upgrade)
