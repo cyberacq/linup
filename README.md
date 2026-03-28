@@ -1,5 +1,5 @@
 # LinUp Multi-Distro
-- a cross-distribution system update manager supporting multiple Linux distributions and package managers with intelligent update handling.
+A cross-distribution system update manager supporting multiple Linux distributions and package managers with intelligent update handling.
 
 Getting start with Multi-Distro:
 "chmod +x linup-multi-distro-[version]-installer.sh && sudo ./linup-multi-distro-[version]-installer.sh"
@@ -43,7 +43,7 @@ Comprehensive Logging
 
 
 # LinUp with swizzin Support
-- a comprehensive system update manager for Ubuntu and Debian-based systems with intelligent swizzin update support and upgrade protection during kernel reboots.
+A comprehensive system update manager for Ubuntu and Debian-based systems with intelligent swizzin update support and upgrade protection during kernel reboots.
 
 Getting started with swizzin Support:
 "chmod +x linup-swizzin-support-[version]-installer.sh && sudo ./linup-swizzin-support-[version]-installer.sh"
