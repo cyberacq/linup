@@ -1,0 +1,1200 @@
+#!/bin/bash
+
+################################################################################
+# Linup Installer
+# Version: 2.5
+# Description: Installer for Linux Updater with swizzin Update Support
+################################################################################
+
+set -e
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# UTF-8 Braille spinner
+SPINNER_CHARS=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+SPINNER_PID=""
+
+# Installation paths
+INSTALL_DIR="/usr/local/bin"
+CONFIG_DIR="$HOME/cyberacq/software/linup"
+LOG_FILE="/var/log/linup.log"
+MANPAGE_DIR="/usr/share/man/man1"
+
+################################################################################
+# Helper Functions
+################################################################################
+
+start_spinner() {
+    local message="$1"
+    (
+        i=0
+        while true; do
+            printf "\r\033[K${YELLOW}${SPINNER_CHARS[$i]}${NC} $message"
+            i=$(( (i + 1) % ${#SPINNER_CHARS[@]} ))
+            sleep 0.1
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+stop_spinner() {
+    local status="$1"
+    local message="$2"
+
+    if [ -n "$SPINNER_PID" ]; then
+        kill $SPINNER_PID 2>/dev/null || true
+        wait $SPINNER_PID 2>/dev/null || true
+        SPINNER_PID=""
+    fi
+
+    if [ "$status" = "success" ]; then
+        printf "\r\033[K${GREEN}✓${NC} $message\n"
+    elif [ "$status" = "fail" ]; then
+        printf "\r\033[K${RED}✗${NC} $message\n"
+    else
+        printf "\r\033[K$message\n"
+    fi
+}
+
+print_header() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}$1${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+################################################################################
+# Detection Functions
+################################################################################
+
+detect_swizzin() {
+    if [ -f "/install/.swizzin.lock" ] || [ -d "/etc/swizzin" ]; then
+        return 0
+    fi
+    return 1
+}
+
+################################################################################
+# Configuration Functions
+################################################################################
+
+create_config() {
+    local swizzin_support="$1"
+    local swizzin_detect="$2"
+
+    mkdir -p "$CONFIG_DIR"
+
+    cat > "$CONFIG_DIR/config" << EOF
+# Linup Configuration
+# Generated on $(date)
+
+SWIZZIN_SUPPORT=$swizzin_support
+SWIZZIN_DETECT=$swizzin_detect
+EOF
+
+    chmod 600 "$CONFIG_DIR/config"
+}
+
+################################################################################
+# Installation Functions
+################################################################################
+
+install_linup_script() {
+    local swizzin_support="$1"
+
+    start_spinner "Creating linup executable..."
+    sleep 1
+
+    cat > "$INSTALL_DIR/linup" << 'LINUP_SCRIPT_EOF'
+#!/bin/bash
+
+################################################################################
+# Linux Updater with swizzin Update Support and Upgrade Protection
+# Version: 2.5
+# Description: Comprehensive system updater for Ubuntu/Debian with swizzin
+#              update support and upgrade protection during kernel reboots
+################################################################################
+
+set -e
+
+# Script metadata
+SCRIPT_VERSION="2.5"
+SCRIPT_NAME="linup"
+CONFIG_DIR="$HOME/cyberacq/software/linup"
+LOG_FILE="/var/log/linup.log"
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Swizzin detection variables
+SWIZZIN_DETECTED=false
+SWIZZIN_PATH=""
+SWIZZIN_DIR="/etc/swizzin"
+SWIZZIN_SUPPORT=false
+SWIZZIN_DETECT=false
+
+################################################################################
+# Logging Function
+################################################################################
+
+log_action() {
+    # Only log if running as root to avoid permission errors
+    if [ "$EUID" -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null || true
+    fi
+}
+
+################################################################################
+# Helper Functions
+################################################################################
+
+print_status() {
+    echo -e "${BLUE}==>${NC} $1"
+    log_action "STATUS: $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+    log_action "SUCCESS: $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+    log_action "WARNING: $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+    log_action "ERROR: $1"
+}
+
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+    log_action "INFO: $1"
+}
+
+print_header() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}$1${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+################################################################################
+# Configuration Loading
+################################################################################
+
+load_config() {
+    if [ -f "$CONFIG_DIR/config" ]; then
+        source "$CONFIG_DIR/config"
+    fi
+}
+
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_DIR/config" << EOF
+# Linup Configuration
+SWIZZIN_SUPPORT=$SWIZZIN_SUPPORT
+SWIZZIN_DETECT=$SWIZZIN_DETECT
+EOF
+}
+
+################################################################################
+# Version and Help Functions
+################################################################################
+
+show_version() {
+    echo "Linux Updater version $SCRIPT_VERSION"
+    exit 0
+}
+
+show_help() {
+    cat << EOF
+Linux Updater v$SCRIPT_VERSION - System Update Manager with swizzin Update Support
+https://github.com/cyberacq/linup
+
+USAGE:
+    $SCRIPT_NAME [OPTIONS]
+
+DESCRIPTION:
+    Comprehensive system updater for Ubuntu/Debian systems with intelligent
+    swizzin update support and upgrade protection during kernel reboots.
+
+OPTIONS:
+    -h, --help              Display this help message
+    -v, --version           Display version information
+    -l, --log               View the linup log file
+    -r, --remove            Uninstall linup from the system
+
+FEATURES:
+    • Interactive system package updates with numbered selection
+    • Automatic swizzin detection and safe updating
+    • Tiered reboot management: required (kernel/libc6/systemd/dbus) vs
+      recommended (libssl/openssl/libgnutls)
+    • Stale library detection via /proc maps as fallback
+    • Prevents unsafe swizzin updates during kernel reboots
+    • Automatic post-reboot swizzin updates via profile.d login script
+    • Package cleanup with autoremove
+    • Comprehensive logging
+
+EXAMPLES:
+    # Run the updater interactively
+    sudo $SCRIPT_NAME
+
+    # View the log file
+    $SCRIPT_NAME --log
+
+    # View the manual page
+    man $SCRIPT_NAME
+
+    # Uninstall linup
+    sudo $SCRIPT_NAME --remove
+
+REQUIREMENTS:
+    • Must be run as root or with sudo
+    • Ubuntu or Debian-based system
+    • Optional: swizzin installation
+
+AUTHOR:
+    cyberacq - https://github.com/cyberacq/linup
+
+EOF
+    exit 0
+}
+
+show_log() {
+    if [ -f "$LOG_FILE" ]; then
+        less "$LOG_FILE"
+    else
+        echo "Log file not found at $LOG_FILE"
+    fi
+    exit 0
+}
+
+################################################################################
+# Uninstall Function
+################################################################################
+
+uninstall_linup() {
+    if [ "$EUID" -ne 0 ]; then
+        print_error "Uninstalling linup requires root privileges"
+        exit 1
+    fi
+
+    echo ""
+    print_header "Uninstall Linup"
+    echo ""
+
+    print_warning "This will remove linup from your system"
+    echo ""
+    read -p "Are you sure you want to uninstall linup? (y/N): " confirm
+
+    case "${confirm,,}" in
+        y|yes)
+            ;;
+        *)
+            echo "Uninstall cancelled"
+            exit 0
+            ;;
+    esac
+
+    echo ""
+
+    # Remove executable
+    if [ -f "/usr/local/bin/linup" ]; then
+        rm -f "/usr/local/bin/linup"
+        print_success "Removed linup executable"
+    fi
+
+    # Remove manpage
+    if [ -f "/usr/share/man/man1/linup.1.gz" ]; then
+        rm -f "/usr/share/man/man1/linup.1.gz"
+        if command -v mandb &> /dev/null; then
+            mandb -q 2>/dev/null || true
+        fi
+        print_success "Removed manual page"
+    fi
+
+    # Remove post-reboot swizzin update (profile.d script and flag)
+    if [ -f "/etc/profile.d/linup-swizzin-update.sh" ]; then
+        rm -f "/etc/profile.d/linup-swizzin-update.sh"
+        rm -f "/etc/linup/swizzin-update-pending"
+        print_success "Removed swizzin post-reboot update script"
+    fi
+
+    # Remove legacy systemd service if present from a prior install
+    if [ -f "/etc/systemd/system/swizzin-update-once.service" ]; then
+        systemctl disable swizzin-update-once.service 2>/dev/null || true
+        rm -f "/etc/systemd/system/swizzin-update-once.service"
+        rm -f "/usr/local/bin/swizzin-update-once.sh"
+        systemctl daemon-reload
+        print_success "Removed legacy swizzin update service"
+    fi
+
+    # Ask about configuration
+    echo ""
+    read -p "Delete configuration directory ($CONFIG_DIR)? (y/N): " del_config
+
+    case "${del_config,,}" in
+        y|yes)
+            if [ -d "$CONFIG_DIR" ]; then
+                rm -rf "$CONFIG_DIR"
+                print_success "Removed configuration directory"
+            fi
+            ;;
+        *)
+            echo "Configuration directory preserved"
+            ;;
+    esac
+
+    # Ask about log file
+    echo ""
+    read -p "Delete log file ($LOG_FILE)? (y/N): " del_log
+
+    case "${del_log,,}" in
+        y|yes)
+            if [ -f "$LOG_FILE" ]; then
+                rm -f "$LOG_FILE"
+                print_success "Removed log file"
+            fi
+            ;;
+        *)
+            echo "Log file preserved"
+            ;;
+    esac
+
+    echo ""
+    print_success "Linup has been uninstalled"
+    echo ""
+
+    exit 0
+}
+
+################################################################################
+# Swizzin Functions
+################################################################################
+
+detect_swizzin() {
+    if [ -f "/install/.swizzin.lock" ] || [ -d "$SWIZZIN_DIR" ]; then
+        SWIZZIN_DETECTED=true
+        if [ -f "/usr/local/bin/box" ]; then
+            SWIZZIN_PATH="/usr/local/bin/box"
+        elif command -v box &> /dev/null; then
+            SWIZZIN_PATH=$(command -v box)
+        fi
+    fi
+}
+
+prompt_enable_swizzin() {
+    echo ""
+    print_warning "Swizzin installation detected!"
+    echo ""
+    read -p "Would you like to enable swizzin update support and upgrade protection? (Y/n): " response
+
+    case "${response,,}" in
+        n|no)
+            SWIZZIN_SUPPORT=false
+            SWIZZIN_DETECT=true
+            print_status "Swizzin support disabled. You can enable it later by editing $CONFIG_DIR/config"
+            ;;
+        *)
+            SWIZZIN_SUPPORT=true
+            SWIZZIN_DETECT=true
+            print_success "Swizzin support enabled!"
+            ;;
+    esac
+
+    save_config
+}
+
+# Used exclusively to guard swizzin updates: returns 0 only when a kernel
+# package update is the reason a reboot is pending.
+check_kernel_reboot_needed() {
+    if [ -f /var/run/reboot-required ]; then
+        if grep -q "linux-image" /var/run/reboot-required.pkgs 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+create_swizzin_update_service() {
+    local flag_file="/etc/linup/swizzin-update-pending"
+    local profile_script="/etc/profile.d/linup-swizzin-update.sh"
+
+    # Create persistent flag that survives reboot
+    mkdir -p /etc/linup
+    touch "$flag_file"
+
+    # profile.d script runs in the user's own terminal session on login,
+    # so the update output is fully visible in the foreground
+    cat > "$profile_script" << 'EOF'
+#!/bin/bash
+# Run pending swizzin update in the foreground on user login after kernel reboot
+
+FLAG_FILE="/etc/linup/swizzin-update-pending"
+SWIZZIN_PATH="/usr/local/bin/box"
+[ -f "$SWIZZIN_PATH" ] || SWIZZIN_PATH=$(command -v box 2>/dev/null)
+
+if [ -f "$FLAG_FILE" ] && [ -n "$SWIZZIN_PATH" ] && [ -x "$SWIZZIN_PATH" ]; then
+    # Only run for users who can sudo (swizzin admins), or root
+    if [ "$EUID" -eq 0 ] || sudo -n true 2>/dev/null; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Swizzin update pending from kernel reboot (linup)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+
+        # Remove flag before running so a crashed/interrupted update
+        # doesn't loop on every subsequent login
+        rm -f "$FLAG_FILE"
+
+        if [ "$EUID" -eq 0 ]; then
+            "$SWIZZIN_PATH" update
+        else
+            sudo "$SWIZZIN_PATH" update
+        fi
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Swizzin update complete"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+    fi
+fi
+EOF
+
+    chmod +x "$profile_script"
+
+    print_success "Swizzin will update in your terminal when you next log in"
+    log_action "Created swizzin post-reboot profile.d update script"
+}
+
+handle_swizzin_update() {
+    if [ "$SWIZZIN_SUPPORT" = false ] || [ "$SWIZZIN_DETECTED" = false ] || [ -z "$SWIZZIN_PATH" ]; then
+        return
+    fi
+
+    echo ""
+    print_header "Swizzin Update"
+
+    if check_kernel_reboot_needed; then
+        print_warning "Kernel update detected - reboot pending"
+        print_warning "It is not safe to update swizzin with a pending kernel reboot"
+        echo ""
+        read -p "Update swizzin automatically after you log in following reboot? (Y/n): " response
+
+        case "${response,,}" in
+            n|no)
+                print_status "Swizzin will not be updated after reboot"
+                log_action "User declined swizzin post-reboot update"
+                ;;
+            *)
+                create_swizzin_update_service
+                ;;
+        esac
+    else
+        print_status "Updating swizzin..."
+        if "$SWIZZIN_PATH" update; then
+            print_success "Swizzin updated successfully"
+        else
+            print_error "Swizzin update failed"
+        fi
+    fi
+}
+
+################################################################################
+# Reboot Detection Functions
+################################################################################
+
+# Returns a newline-separated list of process names holding deleted *shared
+# library* (.so) mappings. Matching bare '(deleted)' is too broad: long-running
+# processes routinely hold deleted /memfd:, /SYSV (shm), dconf, semaphore and
+# similar runtime mappings that have nothing to do with package updates, which
+# made the critical-reboot fallback fire on essentially every run. Restrict to
+# deleted .so mappings so only a genuine library replacement counts.
+get_stale_processes() {
+    find /proc -maxdepth 2 -name maps -readable 2>/dev/null \
+        | xargs grep -lE '\.so[.0-9]*[[:space:]]+\(deleted\)' 2>/dev/null \
+        | awk -F/ '{print $3}' \
+        | sort -u \
+        | while read -r pid; do cat "/proc/$pid/comm" 2>/dev/null; done \
+        | sort -u
+}
+
+# Critical packages: cannot be activated without a reboot.
+# Covers: core C library, init system, device manager, IPC bus, PAM stack.
+check_critical_reboot_needed() {
+    if [ -f /var/run/reboot-required.pkgs ]; then
+        if grep -qE '^(libc6|systemd|udev|dbus|libpam)' /var/run/reboot-required.pkgs 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Fallback: processes holding stale mappings for critical system libraries
+    local stale
+    stale=$(get_stale_processes | grep -E '^(systemd|dbus-daemon|udevd|sshd|init)$' || true)
+    if [ -n "$stale" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Recommended packages: running processes use the old version but restarting
+# individual services is an acceptable alternative to a full reboot.
+check_recommended_reboot_needed() {
+    if [ -f /var/run/reboot-required.pkgs ]; then
+        if grep -qE '^(libssl|openssl|libgnutls|libcrypto)' /var/run/reboot-required.pkgs 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Fallback: any process holding a deleted libssl/libcrypto/libgnutls mapping
+    local stale
+    stale=$(find /proc -maxdepth 2 -name maps -readable 2>/dev/null \
+        | xargs grep -lE 'lib(ssl|crypto|gnutls)[^/]*(deleted)' 2>/dev/null \
+        | awk -F/ '{print $3}' | sort -u | head -1 || true)
+    if [ -n "$stale" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+offer_reboot() {
+    local kernel_reboot=false
+    local critical_reboot=false
+    local recommended_reboot=false
+
+    check_kernel_reboot_needed   && kernel_reboot=true      || true
+    check_critical_reboot_needed && critical_reboot=true    || true
+    check_recommended_reboot_needed && recommended_reboot=true || true
+
+    # ── Required reboot ──────────────────────────────────────────────────────
+    if [ "$kernel_reboot" = true ] || [ "$critical_reboot" = true ]; then
+        echo ""
+        print_warning "Reboot required to complete updates"
+        echo ""
+
+        if [ "$kernel_reboot" = true ]; then
+            if [ -f /var/run/reboot-required.pkgs ]; then
+                local kernel_pkgs
+                kernel_pkgs=$(grep -E '^(linux-image|linux-modules)' /var/run/reboot-required.pkgs 2>/dev/null || true)
+                if [ -n "$kernel_pkgs" ]; then
+                    echo "  Kernel packages updated:"
+                    echo "$kernel_pkgs" | sed 's/^/    - /'
+                fi
+            else
+                echo "  Kernel: installed version differs from running kernel"
+            fi
+        fi
+
+        if [ "$critical_reboot" = true ]; then
+            echo "  Critical system libraries/services updated:"
+
+            if [ -f /var/run/reboot-required.pkgs ]; then
+                local critical_pkgs
+                critical_pkgs=$(grep -E '^(libc6|systemd|udev|dbus|libpam)' /var/run/reboot-required.pkgs 2>/dev/null || true)
+                if [ -n "$critical_pkgs" ]; then
+                    echo "$critical_pkgs" | sed 's/^/    - /'
+                fi
+            fi
+
+            # Show stale process names detected via /proc maps
+            local stale_critical
+            stale_critical=$(get_stale_processes | grep -E '^(systemd|dbus-daemon|udevd|sshd|init)$' || true)
+            if [ -n "$stale_critical" ]; then
+                echo "  Processes running against replaced libraries:"
+                echo "$stale_critical" | sed 's/^/    - /'
+            fi
+        fi
+
+        echo ""
+        log_action "Reboot required: kernel=$kernel_reboot critical=$critical_reboot"
+        read -p "Reboot now? (Y/n): " response
+        case "${response,,}" in
+            n|no)
+                print_status "Reboot postponed. Please reboot manually when convenient."
+                log_action "User postponed required reboot"
+                ;;
+            *)
+                print_status "Rebooting system in 5 seconds..."
+                log_action "System reboot initiated by user"
+                sleep 5
+                reboot
+                ;;
+        esac
+        return
+    fi
+
+    # ── Recommended reboot (only shown when no required reboot) ──────────────
+    if [ "$recommended_reboot" = true ]; then
+        echo ""
+        print_info "Reboot recommended (non-critical)"
+        echo ""
+
+        if [ -f /var/run/reboot-required.pkgs ]; then
+            local rec_pkgs
+            rec_pkgs=$(grep -E '^(libssl|openssl|libgnutls|libcrypto)' /var/run/reboot-required.pkgs 2>/dev/null || true)
+            if [ -n "$rec_pkgs" ]; then
+                echo "  Packages that benefit from a reboot:"
+                echo "$rec_pkgs" | sed 's/^/    - /'
+            fi
+        else
+            echo "  TLS/crypto libraries were updated; running processes use the old versions."
+        fi
+
+        echo "  Affected services can alternatively be restarted individually."
+        echo ""
+        log_action "Reboot recommended: libssl/crypto libraries updated"
+        read -p "Reboot now? (Y/n/skip): " response
+        case "${response,,}" in
+            n|no|s|skip)
+                print_status "Reboot skipped. Consider restarting affected services."
+                log_action "User skipped recommended reboot"
+                ;;
+            *)
+                print_status "Rebooting system in 5 seconds..."
+                log_action "System reboot initiated by user (recommended)"
+                sleep 5
+                reboot
+                ;;
+        esac
+    fi
+}
+
+################################################################################
+# Main Update Functions
+################################################################################
+
+check_updates() {
+    echo ""
+    read -p "Do you want to list current updates? (Y/n): " check_updates
+
+    case "${check_updates,,}" in
+        n|no)
+            echo "Skipping update check."
+            log_action "User skipped update check"
+            return 1
+            ;;
+        *)
+            print_status "Checking for updates..."
+            apt update > /dev/null 2>&1
+
+            # Capture upgradable packages
+            mapfile -t UPDATES < <(apt list --upgradable 2>/dev/null | grep -v "Listing" | grep -v "phased")
+
+            if [ ${#UPDATES[@]} -eq 0 ]; then
+                print_success "No updates available"
+                log_action "No updates available"
+                return 1
+            fi
+
+            echo ""
+            echo "Available updates (excluding phased):"
+            echo ""
+
+            for i in "${!UPDATES[@]}"; do
+                printf "%3d) %s\n" $((i+1)) "${UPDATES[$i]}"
+            done
+
+            log_action "Found ${#UPDATES[@]} updates available"
+            return 0
+            ;;
+    esac
+}
+
+apply_updates() {
+    # Only offer to apply updates if there are updates available
+    if [ ${#UPDATES[@]} -eq 0 ]; then
+        return
+    fi
+
+    echo ""
+    read -p "Do you want to apply updates? (A)ll/(S)pecific number/(N)o: " upgrade_prompt
+
+    case "${upgrade_prompt,,}" in
+        n|no)
+            echo "Upgrade cancelled."
+            log_action "User cancelled upgrade"
+            ;;
+        s|specific)
+            read -p "Enter update number to install: " update_num
+            if [ "$update_num" -ge 1 ] && [ "$update_num" -le ${#UPDATES[@]} ]; then
+                local pkg_line="${UPDATES[$((update_num-1))]}"
+                local pkg_name=$(echo "$pkg_line" | cut -d'/' -f1)
+                print_status "Installing $pkg_name (upgrade only)..."
+                apt install --only-upgrade -y "$pkg_name"
+                print_success "Update applied successfully"
+                log_action "Installed specific package: $pkg_name (--only-upgrade)"
+            else
+                print_error "Invalid update number"
+                log_action "Invalid update number entered: $update_num"
+            fi
+            ;;
+        *)
+            print_status "Applying all updates (excluding phased)..."
+            apt upgrade -y
+            print_success "All updates applied successfully"
+            log_action "Applied all available updates"
+            ;;
+    esac
+}
+
+run_autoremove() {
+    # Check if there are packages to autoremove
+    local autoremove_check=$(apt autoremove --dry-run 2>/dev/null | grep -c "^Remv" || true)
+
+    if [ "$autoremove_check" -eq 0 ]; then
+        log_action "No packages to autoremove"
+        return
+    fi
+
+    echo ""
+    read -p "Do you want to run 'apt autoremove'? (Y/n): " apt_autoremove
+
+    case "${apt_autoremove,,}" in
+        n|no)
+            echo "apt autoremove not selected."
+            log_action "User skipped autoremove"
+            ;;
+        *)
+            print_status "Removing unnecessary packages..."
+            apt autoremove -y
+            print_success "Cleanup completed"
+            log_action "Autoremove completed"
+            ;;
+    esac
+}
+
+prompt_swizzin_update() {
+    if [ "$SWIZZIN_SUPPORT" = false ]; then
+        return
+    fi
+
+    if [ "$SWIZZIN_DETECTED" = false ]; then
+        return
+    fi
+
+    echo ""
+    read -p "Do you want to check for and apply swizzin upgrades? (Y/n): " user_response
+
+    case "${user_response,,}" in
+        n|no)
+            echo "Skipping swizzin update."
+            log_action "User skipped swizzin update"
+            ;;
+        *)
+            handle_swizzin_update
+            ;;
+    esac
+}
+
+################################################################################
+# Main Function
+################################################################################
+
+main() {
+    # Check if running as root
+    if [ "$EUID" -ne 0 ]; then
+        print_error "This script must be run as root or with sudo"
+        exit 1
+    fi
+
+    # Load configuration
+    load_config
+
+    # Detect swizzin if detection is enabled
+    if [ "$SWIZZIN_DETECT" = true ]; then
+        detect_swizzin
+
+        # If swizzin detected but support not enabled, prompt user
+        if [ "$SWIZZIN_DETECTED" = true ] && [ "$SWIZZIN_SUPPORT" = false ]; then
+            prompt_enable_swizzin
+        fi
+    fi
+
+    # Initialize log
+    log_action "===== Linup session started ====="
+
+    # Welcome banner
+    echo ""
+    print_header "Linux Updater v$SCRIPT_VERSION with swizzin Update Support"
+    echo ""
+
+    # Run update sequence
+    local updates_available=true
+    if ! check_updates; then
+        updates_available=false
+    fi
+
+    # Only offer to apply updates if there are updates
+    if [ "$updates_available" = true ]; then
+        apply_updates
+    fi
+
+    run_autoremove
+    prompt_swizzin_update
+    offer_reboot
+
+    # Completion message
+    echo ""
+    print_header "Update Operations Completed"
+    echo ""
+
+    log_action "===== Linup session completed ====="
+}
+
+################################################################################
+# Argument Parsing
+################################################################################
+
+case "${1,,}" in
+    -h|--help)
+        show_help
+        ;;
+    -v|--version)
+        show_version
+        ;;
+    -l|--log)
+        show_log
+        ;;
+    -r|--remove)
+        uninstall_linup
+        ;;
+    "")
+        main
+        ;;
+    *)
+        echo "Unknown option: $1"
+        echo "Use --help for usage information"
+        exit 1
+        ;;
+esac
+
+exit 0
+LINUP_SCRIPT_EOF
+
+    chmod +x "$INSTALL_DIR/linup"
+
+    stop_spinner "success" "Linup executable created"
+}
+
+install_manpage() {
+    start_spinner "Installing manual page..."
+    sleep 1
+
+    mkdir -p "$MANPAGE_DIR"
+
+    cat << 'MANPAGE_EOF' | gzip > "$MANPAGE_DIR/linup.1.gz"
+.TH linup 1 "June 2026" "Version 2.5" "User Commands"
+.SH NAME
+linup \- System update manager with swizzin update support and upgrade protection
+.SH SYNOPSIS
+.B linup
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B linup
+is a comprehensive system update manager for Ubuntu and Debian-based systems with intelligent swizzin update support and upgrade protection during kernel reboots.
+.PP
+The script provides an interactive interface for managing system updates, automatically detects swizzin installations, and ensures safe update procedures when kernel updates are pending.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit
+.TP
+.BR \-v ", " \-\-version
+Display version information and exit
+.TP
+.BR \-l ", " \-\-log
+View the linup log file
+.TP
+.BR \-r ", " \-\-remove
+Uninstall linup from the system
+.SH FEATURES
+.TP
+.B Interactive Updates with Numbered Selection
+Prompts user for each update operation with the ability to install all updates or specific updates by number
+.TP
+.B Swizzin Detection
+Automatically detects swizzin installations and prompts for update support enablement
+.TP
+.B Kernel Safety
+Detects pending kernel updates and prevents unsafe swizzin updates, offering to schedule updates after reboot
+.TP
+.B Automatic Post-Reboot Updates
+Creates a /etc/profile.d/ login script to update swizzin in the foreground of the user's terminal after a kernel reboot
+.TP
+.B Tiered Reboot Management
+Distinguishes between packages that require a reboot (kernel, libc6, systemd,
+udev, dbus, libpam) and those where a reboot is merely recommended (libssl,
+openssl, libgnutls). Each tier shows the responsible packages and prompts
+separately. The recommended prompt offers a skip option with a reminder to
+restart affected services individually.
+.TP
+.B Stale Library Detection
+Uses /proc/*/maps to detect processes holding file descriptors to replaced
+shared libraries. Critical process names (systemd, dbus-daemon, udevd, sshd)
+trigger a required reboot warning; TLS library matches trigger a recommended
+reboot warning. This provides reboot guidance even when /var/run/reboot-required
+has already been cleared.
+.TP
+.B Package Cleanup
+Provides autoremove functionality to clean up unnecessary packages
+.TP
+.B Comprehensive Logging
+All actions are logged to /var/log/linup.log for audit and troubleshooting
+.SH WORKFLOW
+.PP
+The script follows this workflow:
+.IP 1. 3
+Optional: List available updates with numbers
+.IP 2.
+Apply system package updates (all or by number)
+.IP 3.
+Run autoremove to clean up packages
+.IP 4.
+Detect and update swizzin (if installed and enabled)
+.IP 5.
+Check for required reboot (kernel, libc6, systemd, dbus, udev, libpam, or
+stale critical process mappings). If detected, prompt to reboot now.
+.IP 6.
+If no required reboot, check for recommended reboot (libssl, openssl,
+libgnutls or stale crypto library mappings). If detected, prompt to reboot
+or skip in favour of individual service restarts.
+.SH KERNEL UPDATE HANDLING
+When a kernel update is detected that requires a reboot:
+.IP \(bu 2
+The script warns that updating swizzin is unsafe
+.IP \(bu
+Offers to schedule swizzin update after reboot and user login
+.IP \(bu
+Creates a persistent flag file and a /etc/profile.d/ login script
+.IP \(bu
+On next login the update runs in the foreground of the user's terminal so output is fully visible
+.IP \(bu
+The flag file is removed before the update runs, preventing re-runs on subsequent logins
+.PP
+The post-reboot update only runs for users with sudo access or root, ensuring the update has the required privileges.
+.SH REBOOT DETECTION
+.PP
+Reboot detection uses two sources:
+.TP
+.B /var/run/reboot-required.pkgs
+Debian/Ubuntu systems write package names here after updates. linup
+parses this file to classify packages as requiring or merely recommending
+a reboot. Kernel and critical system packages (libc6, systemd, udev, dbus,
+libpam) trigger a required reboot. TLS/crypto packages (libssl, openssl,
+libgnutls) trigger a recommended reboot.
+.TP
+.B /proc/*/maps
+Processes holding file descriptors to deleted (replaced) shared library files
+are detected by scanning /proc/PID/maps for entries marked (deleted). Critical
+process names (systemd, dbus-daemon, udevd, sshd) trigger a required reboot
+warning; TLS library matches trigger a recommended reboot warning. This
+fallback is effective even after /var/run/reboot-required has been cleared or
+when the system was updated outside of linup.
+.SH SWIZZIN DETECTION
+The script detects swizzin by checking for:
+.IP \(bu 2
+/etc/swizzin directory
+.IP \(bu
+/install/.swizzin.lock file
+.IP \(bu
+box command availability
+.PP
+If swizzin is detected after installation, the user is prompted to enable swizzin update support.
+.SH EXAMPLES
+.TP
+Run the updater interactively:
+.B sudo linup
+.TP
+View the log file:
+.B linup --log
+.TP
+View version:
+.B linup --version
+.TP
+View this manual:
+.B man linup
+.SH FILES
+.TP
+.I /usr/local/bin/linup
+Main executable
+.TP
+.I ~/cyberacq/software/linup/config
+User configuration file
+.TP
+.I /var/log/linup.log
+Log file for all linup actions
+.TP
+.I /etc/swizzin
+Swizzin installation directory
+.TP
+.I /var/run/reboot-required
+System reboot requirement flag
+.TP
+.I /var/run/reboot-required.pkgs
+List of packages requiring reboot, parsed for tiered reboot classification
+.TP
+.I /etc/profile.d/linup-swizzin-update.sh
+Login script that runs pending swizzin update in the foreground
+.TP
+.I /etc/linup/swizzin-update-pending
+Flag file indicating a swizzin update is due after kernel reboot
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (not run as root, command failed, etc.)
+.SH REQUIREMENTS
+.IP \(bu 2
+Must be run as root or with sudo for update operations
+.IP \(bu
+Ubuntu or Debian-based system
+.IP \(bu
+apt package manager
+.SH AUTHOR
+cyberacq - https://github.com/cyberacq/linup
+.SH SEE ALSO
+.BR apt (8),
+.BR apt-get (8),
+.BR reboot (8)
+MANPAGE_EOF
+
+    if command -v mandb &> /dev/null; then
+        mandb -q 2>/dev/null || true
+    fi
+
+    stop_spinner "success" "Manual page installed"
+}
+
+################################################################################
+# Main Installation
+################################################################################
+
+main() {
+    # Check if running as root
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "${RED}✗${NC} This installer must be run as root or with sudo"
+        exit 1
+    fi
+
+    echo ""
+    print_header "Linup Installer v2.5"
+    echo ""
+
+    # Detect swizzin
+    local swizzin_installed=false
+    local swizzin_support=false
+    local swizzin_detect=true
+
+    start_spinner "Detecting system configuration..."
+    sleep 1
+
+    if detect_swizzin; then
+        swizzin_installed=true
+        stop_spinner "success" "Swizzin installation detected"
+    else
+        swizzin_installed=false
+        stop_spinner "success" "System configuration detected"
+    fi
+
+    echo ""
+
+    # Handle swizzin configuration
+    if [ "$swizzin_installed" = true ]; then
+        echo -e "${YELLOW}⚠${NC} Swizzin installation detected!"
+        echo ""
+        read -p "Add swizzin update support and upgrade protection when kernel update is pending reboot? (Y/n): " swizzin_choice
+
+        case "${swizzin_choice,,}" in
+            n|no)
+                swizzin_support=false
+                echo -e "${YELLOW}⚠${NC} Swizzin support disabled (not recommended)"
+                ;;
+            *)
+                swizzin_support=true
+                echo -e "${GREEN}✓${NC} Swizzin support will be enabled"
+                ;;
+        esac
+    else
+        echo -e "${BLUE}ℹ${NC} You're not currently a swizzin admin, but the Linux Updater is not just for swizzin admins!"
+        echo "  All other features will work as expected."
+        echo ""
+        read -p "Continue to detect swizzin when linup is run? (Y/n): " detect_choice
+
+        case "${detect_choice,,}" in
+            n|no)
+                swizzin_detect=false
+                echo "Swizzin detection disabled"
+                ;;
+            *)
+                swizzin_detect=true
+                echo "Swizzin will be detected silently on each run"
+                ;;
+        esac
+    fi
+
+    echo ""
+
+    # Create directories
+    start_spinner "Creating directories..."
+    sleep 1
+    mkdir -p "$CONFIG_DIR"
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+    stop_spinner "success" "Directories created"
+
+    # Install linup script
+    install_linup_script "$swizzin_support"
+
+    # Install manpage
+    install_manpage
+
+    # Create configuration
+    start_spinner "Saving configuration..."
+    sleep 1
+    create_config "$swizzin_support" "$swizzin_detect"
+    stop_spinner "success" "Configuration saved"
+
+    echo ""
+    print_header "Installation Complete!"
+    echo ""
+    echo "Linup has been successfully installed to $INSTALL_DIR/linup"
+    echo ""
+    echo "Configuration: $CONFIG_DIR/config"
+    echo "Log file: $LOG_FILE"
+    echo ""
+    echo "Usage:"
+    echo "  sudo linup          - Run the updater"
+    echo "  linup --help        - Show help"
+    echo "  linup --log         - View log file"
+    echo "  linup --remove      - Uninstall linup"
+    echo "  man linup           - Read the manual"
+    echo ""
+
+    if [ "$swizzin_support" = true ]; then
+        echo -e "${GREEN}✓${NC} Swizzin update support and upgrade protection enabled"
+    elif [ "$swizzin_detect" = true ]; then
+        echo -e "${YELLOW}⚠${NC} Swizzin detection enabled - you'll be prompted if swizzin is found"
+    fi
+
+    echo ""
+}
+
+main "$@"
+
+exit 0
